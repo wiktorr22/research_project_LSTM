@@ -10,19 +10,26 @@ import datetime
 from lib import metrics, utils
 from model.pytorch_LSTM.loss import masked_mae_loss
 import time
+
+# Specify the data directory
 data = utils.load_dataset("data/METR-LA", 64, 64)
 scaler = data['scaler']
 train_loader = data['train_loader']
 test_loader = data['test_loader']
 val_loader = data['val_loader']
 time.strftime('%m%d%H%M%S')
+
+
+# number of sensors in the current subset
 SENSORS = 35
 
 # logging.
 _log_dir = "data/model/lstm"
 _writer = SummaryWriter('runs/' + _log_dir)
 
-_logger = utils.get_logger(_log_dir, __name__, 'info_.log')
+# specify log filename
+log_filename = 'info.log'
+_logger = utils.get_logger(_log_dir, __name__, log_filename)
 
 def _prepare_data(x, y):
     x, y = _get_x_y(x, y)
@@ -109,9 +116,9 @@ def evaluate(dataset='val', batches_seen=0):
 
         return mean_loss
 # LSTM model
-class CustomTrafficLSTM(nn.Module):
+class TrafficLSTM(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, output_size, num_horizons):
-        super(CustomTrafficLSTM, self).__init__()
+        super(TrafficLSTM, self).__init__()
         self.num_layers = num_layers
         self.hidden_size = hidden_size
         self.num_horizons = num_horizons
@@ -127,21 +134,21 @@ class CustomTrafficLSTM(nn.Module):
         outputs = []
         for t in range(self.num_horizons):  # number of steps to forecast
             out, (h0, c0) = self.lstm(x, (h0, c0))
-            out = out[-1, :, :]  # Get the last time step output (seq_len, batch, hidden) -> (batch, hidden)
-            out = self.fc(out)  # (batch, output_size)
-            outputs.append(out.unsqueeze(0))  # (1, batch, output_size)
+            out = out[-1, :, :]  # Get the last time step output
+            out = self.fc(out)
+            outputs.append(out.unsqueeze(0))
 
             # Replace the oldest value in x with the new prediction
-            out = out.unsqueeze(0)  # (1, batch, output_size)
-            x = torch.cat((x[1:], out), dim=0)  # (new_seq_len, batch, input_size)
+            out = out.unsqueeze(0)
+            x = torch.cat((x[1:], out), dim=0)
 
-        outputs = torch.cat(outputs, dim=0)  # (forecast_steps, batch, output_size)
+        outputs = torch.cat(outputs, dim=0)
         return outputs
 
-# Initialize the model
+# Set number of LSTM units in the model
 lstmUnits = 256 #50 #256
 
-model = CustomTrafficLSTM(SENSORS, lstmUnits, 2, SENSORS, 3)
+model = TrafficLSTM(SENSORS, lstmUnits, 2, SENSORS, 3)
 
 criterion = nn.L1Loss()
 mae_criterion = nn.L1Loss()
